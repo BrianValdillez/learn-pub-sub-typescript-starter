@@ -1,8 +1,10 @@
 import amqp from "amqplib";
 import { declareAndBind, SimpleQueueType } from "../internal/pubsub/pubsub.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
-import type { PlayingState } from "../internal/gamelogic/gamestate.js";
-import { clientWelcome } from "../internal/gamelogic/gamelogic.js";
+import { GameState, type PlayingState } from "../internal/gamelogic/gamestate.js";
+import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit } from "../internal/gamelogic/gamelogic.js";
+import { commandSpawn } from "../internal/gamelogic/spawn.js";
+import { commandMove } from "../internal/gamelogic/move.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -16,6 +18,53 @@ async function main() {
   const username = await clientWelcome();
 
   await declareAndBind(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient);
+
+  const gs:GameState = new GameState(username);
+  let exit = false;
+
+  while (!exit){
+    const words = await getInput();
+    if (words.length === 0){
+      continue;
+    }
+    const word = words[0];
+
+    switch (word){
+      case "spawn":
+        try {
+          commandSpawn(gs, words);
+        }
+        catch (error){
+          console.log(error);
+        }
+        break;
+      case "move":
+        try {
+        const move = commandMove(gs, words);
+        console.log("Move successful.");
+        }
+        catch (error){
+          console.log(`Move failed: ${error}`);
+        }
+        break;
+      case "status":
+        await commandStatus(gs);
+        break;
+      case "help":
+        printClientHelp();
+        break;
+      case "spam":
+        console.log("Spamming not allowed yet!");
+        break;
+      case "quit":
+        printQuit();
+        exit = true;
+        break;
+      default:
+        console.log("Invalid command");
+        break;
+    }
+  }
 }
 
 main().catch((err) => {
