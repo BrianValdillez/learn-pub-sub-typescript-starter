@@ -1,10 +1,11 @@
 import amqp from "amqplib";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/pubsub.js";
+import { declareAndBind, SimpleQueueType, subscribeJSON } from "../internal/pubsub/pubsub.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
 import { GameState, type PlayingState } from "../internal/gamelogic/gamestate.js";
 import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
+import { handlerPause } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -20,8 +21,9 @@ async function main() {
   await declareAndBind(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient);
 
   const gs:GameState = new GameState(username);
-  let exit = false;
+  await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gs));
 
+  let exit = false;
   while (!exit){
     const words = await getInput();
     if (words.length === 0){
