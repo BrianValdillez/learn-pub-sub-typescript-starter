@@ -6,6 +6,12 @@ export enum SimpleQueueType {
   Transient,
 }
 
+export enum AckType {
+  Ack,
+  NackRequeue,
+  NackDiscard,
+}
+
 export function publishJSON<T>(
   ch: ConfirmChannel,
   exchange: string,
@@ -45,7 +51,7 @@ export async function subscribeJSON<T>(
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
-  handler: (data: T) => void,
+  handler: (data: T) => AckType,
 ): Promise<void>{
   const ch_q = await declareAndBind(conn, exchange, queueName, key, queueType);
   const ch = ch_q[0];
@@ -57,7 +63,20 @@ export async function subscribeJSON<T>(
     }
     
     const json = JSON.parse(msg.content.toString());
-    handler(json);
-    ch.ack(msg);
+    const ackType = handler(json);
+    switch (ackType){
+      case AckType.Ack:
+        console.log('ACK');
+        ch.ack(msg);
+        break;
+      case AckType.NackRequeue:
+        console.log('NACK RQ');
+        ch.nack(msg, false, true);
+        break;
+      case AckType.NackDiscard:
+        console.log('NACK DC');
+        ch.nack(msg, false, false);
+        break;
+    }
   } )
 }
