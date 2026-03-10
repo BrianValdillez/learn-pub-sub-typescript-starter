@@ -1,11 +1,11 @@
 import amqp from "amqplib";
 import { declareAndBind, SimpleQueueType, subscribeJSON, publishJSON } from "../internal/pubsub/pubsub.js";
-import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { GameState, type PlayingState } from "../internal/gamelogic/gamestate.js";
 import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { handlerMove, handlerPause } from "./handlers.js";
+import { handlerMove, handlerPause, handlerWar } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -14,18 +14,20 @@ async function main() {
   const conn = await amqp.connect(RABBIT_CONNECTION_URL);
   console.log("Successfully connected to Rabbit Server.")
   
-  const ch = await conn.createConfirmChannel();
+  const publishCh = await conn.createConfirmChannel();
 
   const username = await clientWelcome();
   const gs:GameState = new GameState(username);
 
-  await declareAndBind(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient);
+  //await declareAndBind(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient);
   await subscribeJSON(conn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gs));
 
-  const armyMovesQueue = `${ArmyMovesPrefix}.${username}`;
-  const armyMovesKey = `${ArmyMovesPrefix}.*`;
-  await declareAndBind(conn, ExchangePerilTopic, armyMovesQueue, armyMovesKey, SimpleQueueType.Transient);
-  await subscribeJSON(conn, ExchangePerilTopic, armyMovesQueue, armyMovesKey, SimpleQueueType.Transient, handlerMove(gs))
+  //await declareAndBind(conn, ExchangePerilTopic, armyMovesQueue, armyMovesKey, SimpleQueueType.Transient);
+  await subscribeJSON(conn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gs, publishCh));
+
+  //await declareAndBind(conn, ExchangePerilTopic, WarRecognitionsPrefix, `${WarRecognitionsPrefix}.#`, SimpleQueueType.Durable);
+  await subscribeJSON(conn, ExchangePerilTopic, WarRecognitionsPrefix, `${WarRecognitionsPrefix}.#`, SimpleQueueType.Durable, handlerWar(gs));
+
   let exit = false;
   while (!exit){
     const words = await getInput();
@@ -46,7 +48,7 @@ async function main() {
       case "move":
         try {
         const move = commandMove(gs, words);
-        await publishJSON(ch, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, move);
+        await publishJSON(publishCh, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, move);
         console.log("Move successful.");
         }
         catch (error){

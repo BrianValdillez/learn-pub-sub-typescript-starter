@@ -19,7 +19,7 @@ export function publishJSON<T>(
   value: T,
 ): Promise<void>
 {
-    const bytes = Buffer.from(JSON.stringify(value))
+    const bytes = Buffer.from(JSON.stringify(value));
 
     ch.publish(exchange, routingKey, bytes, { contentType: "application/json" });
 
@@ -54,19 +54,17 @@ export async function subscribeJSON<T>(
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
-  handler: (data: T) => AckType,
+  handler: (data: T) => Promise<AckType> | AckType,
 ): Promise<void>{
-  const ch_q = await declareAndBind(conn, exchange, queueName, key, queueType);
-  const ch = ch_q[0];
-  const q = ch_q[1];
-  
-  const replies = await ch.consume(q.queue, (msg: amqp.ConsumeMessage | null) => {
-    if (msg === null){
+  const [ch, q] = await declareAndBind(conn, exchange, queueName, key, queueType);
+
+  await ch.consume(q.queue, async (msg: amqp.ConsumeMessage | null) => {
+    if (!msg){
       return;
     }
     
     const json = JSON.parse(msg.content.toString());
-    const ackType = handler(json);
+    const ackType = await handler(json);
     switch (ackType){
       case AckType.Ack:
         console.log('ACK');
@@ -80,6 +78,9 @@ export async function subscribeJSON<T>(
         console.log('NACK DC');
         ch.nack(msg, false, false);
         break;
+      default:
+        console.log('UNEXPECTED ACK');
+        break;
     }
-  } )
+  });
 }
