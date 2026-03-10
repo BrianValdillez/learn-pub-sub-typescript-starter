@@ -28,8 +28,7 @@ async function main() {
   //await declareAndBind(conn, ExchangePerilTopic, WarRecognitionsPrefix, `${WarRecognitionsPrefix}.#`, SimpleQueueType.Durable);
   await subscribeJSON(conn, ExchangePerilTopic, WarRecognitionsPrefix, `${WarRecognitionsPrefix}.#`, SimpleQueueType.Durable, handlerWar(gs));
 
-  let exit = false;
-  while (!exit){
+  while (true){
     const words = await getInput();
     if (words.length === 0){
       continue;
@@ -66,8 +65,7 @@ async function main() {
         break;
       case "quit":
         printQuit();
-        exit = true;
-        break;
+        process.exit(0);
       default:
         console.log("Invalid command");
         break;

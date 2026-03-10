@@ -33,9 +33,14 @@ export function handlerMove(gs: GameState, ch: ConfirmChannel): (move: ArmyMove)
                         defender: gs.getPlayerSnap(),
                     };
                     
-                    console.log(`War Recognized: ${rw.attacker.username} -> ${rw.defender.username}`);
-                    await publishJSON(ch, ExchangePerilTopic, `${WarRecognitionsPrefix}.${gs.getUsername()}`, rw);
-                    return AckType.NackRequeue;
+                    try {
+                        await publishJSON(ch, ExchangePerilTopic, `${WarRecognitionsPrefix}.${gs.getUsername()}`, rw);
+                        return AckType.Ack;
+                    }
+                    catch (error){
+                        return AckType.NackRequeue;
+                    }
+                    
                 default:
                     return AckType.NackDiscard;
             }
@@ -50,25 +55,26 @@ export function handlerWar(gs: GameState): (rw:RecognitionOfWar) => AckType {
     return (rw: RecognitionOfWar): AckType => {
         const wr = handleWar(gs, rw);
         console.log(`War Result: ${wr.result}`);
-        let ackResult = AckType.NackDiscard;
-
-        switch (wr.result){
+        
+        try {
+            switch (wr.result){
             case WarOutcome.NotInvolved:
-                ackResult = AckType.NackRequeue;
+                return AckType.NackRequeue;
             case WarOutcome.NoUnits: 
-                ackResult = AckType.NackDiscard;
+                return AckType.NackDiscard;
             case WarOutcome.OpponentWon:
-                ackResult = AckType.Ack;
+                return AckType.Ack;
             case WarOutcome.YouWon:
-                ackResult = AckType.Ack;
+                return AckType.Ack;
             case WarOutcome.Draw:
-                ackResult = AckType.Ack;
+                return AckType.Ack;
             default:
                 console.error("Unrecognized War Outcome");
-                ackResult = AckType.NackRequeue;
+                return AckType.NackDiscard;
         }
-
-        process.stdout.write("> ");
-        return ackResult;
+        }
+        finally {
+            process.stdout.write("> ");
+        }
     }
 }
