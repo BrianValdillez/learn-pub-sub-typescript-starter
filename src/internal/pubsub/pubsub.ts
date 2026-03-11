@@ -1,5 +1,6 @@
 import amqp from "amqplib";
 import type { ConfirmChannel } from "amqplib";
+import { encode } from "@msgpack/msgpack";
 
 export enum SimpleQueueType {
   Durable,
@@ -24,6 +25,19 @@ export function publishJSON<T>(
     ch.publish(exchange, routingKey, bytes, { contentType: "application/json" });
 
     return ch.waitForConfirms();
+}
+
+export function publishMsgPack<T>(
+  ch: ConfirmChannel,
+  exchange: string,
+  routingKey: string,
+  value: T
+): Promise<void> {
+  const bytes = Buffer.from(encode(value));
+
+  ch.publish(exchange, routingKey, bytes, { contentType: "application/x-msgpack" });
+
+  return ch.waitForConfirms();
 }
 
 export async function declareAndBind(
