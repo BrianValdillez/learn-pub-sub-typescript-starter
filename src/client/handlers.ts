@@ -7,6 +7,8 @@ import { handleMove, MoveOutcome } from "../internal/gamelogic/move.js";
 import { handlePause } from "../internal/gamelogic/pause.js";
 import { AckType, publishJSON } from "../internal/pubsub/pubsub.js";
 import { handleWar, WarOutcome, type WarResolution } from "../internal/gamelogic/war.js";
+import { publishGameLog } from "./index.js";
+import { channel } from "diagnostics_channel";
 
 export function handlerPause(gs: GameState): (ps: PlayingState) => AckType
 {
@@ -51,10 +53,9 @@ export function handlerMove(gs: GameState, ch: ConfirmChannel): (move: ArmyMove)
     }
 }
 
-export function handlerWar(gs: GameState): (rw:RecognitionOfWar) => AckType {
-    return (rw: RecognitionOfWar): AckType => {
+export function handlerWar(gs: GameState, ch:ConfirmChannel): (rw:RecognitionOfWar) => Promise<AckType> {
+    return async (rw: RecognitionOfWar): Promise<AckType> => {
         const wr = handleWar(gs, rw);
-        console.log(`War Result: ${wr.result}`);
         
         try {
             switch (wr.result){
@@ -63,15 +64,21 @@ export function handlerWar(gs: GameState): (rw:RecognitionOfWar) => AckType {
             case WarOutcome.NoUnits: 
                 return AckType.NackDiscard;
             case WarOutcome.OpponentWon:
+                await publishGameLog(ch, gs.getUsername(), `${wr.winner} won a war against ${wr.loser}`);
                 return AckType.Ack;
             case WarOutcome.YouWon:
+                await publishGameLog(ch, gs.getUsername(), `${wr.winner} won a war against ${wr.loser}`);
                 return AckType.Ack;
             case WarOutcome.Draw:
+                await publishGameLog(ch, gs.getUsername(), `A war between ${wr.attacker} and ${wr.defender} resulted in a draw`);
                 return AckType.Ack;
             default:
                 console.error("Unrecognized War Outcome");
                 return AckType.NackDiscard;
+            }
         }
+        catch {
+            return AckType.NackRequeue;
         }
         finally {
             process.stdout.write("> ");

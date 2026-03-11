@@ -13,7 +13,7 @@ async function main() {
 
   const ch = await conn.createConfirmChannel();
 
-  const gameLog = await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable);
+  //const gameLog = await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable);
 
   printServerHelp();
 
