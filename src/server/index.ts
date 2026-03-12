@@ -16,7 +16,13 @@ async function main() {
 
   const ch = await conn.createConfirmChannel();
 
-  await subscribeMsgPack(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.#`, SimpleQueueType.Durable, handlerGameLog, deserializerGameLog);
+  await subscribeMsgPack(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.#`, SimpleQueueType.Durable, handlerGameLog);
+
+  // Used to run the server from a non-interactive source, like the multiserver.sh file
+  if (!process.stdin.isTTY) {
+    console.log("Non-interactive mode: skipping command input.");
+    return;
+  }
 
   printServerHelp();
 
@@ -63,23 +69,3 @@ main().catch((err) => {
   console.error("Fatal error:", err);
   process.exit(1);
 });
-
-function deserializerGameLog(data: Buffer<ArrayBufferLike>): GameLog{
-  const log =  decode<GameLog>(data);
-
-  if (!isGameLog(log)){
-    throw new Error("Invalid GameLog");
-  }
-
-  return log;
-}
-
-function isGameLog(data: unknown): data is GameLog {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "currentTime" in data &&
-    "message" in data &&
-    "username" in data
-  );
-}
