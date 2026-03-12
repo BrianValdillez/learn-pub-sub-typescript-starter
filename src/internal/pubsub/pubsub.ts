@@ -98,3 +98,38 @@ export async function subscribeJSON<T>(
     }
   });
 }
+
+export async function subscribeMsgPack<T>(
+  conn: amqp.ChannelModel,
+  exchange: string,
+  queueName: string,
+  key: string,
+  queueType: SimpleQueueType,
+  handler: (data: T) => Promise<AckType> | AckType,
+  deserializer: (data: Buffer) => T,
+): Promise<void>{
+  const [ch, q] = await declareAndBind(conn, exchange, queueName, key, queueType);
+
+  await ch.consume(q.queue, async (msg: amqp.ConsumeMessage | null) => {
+    if (!msg){
+      return;
+    }
+    
+    const data = deserializer(msg.content);
+    const ackType = await handler(data);
+    switch (ackType){
+      case AckType.Ack:
+        ch.ack(msg);
+        break;
+      case AckType.NackRequeue:
+        ch.nack(msg, false, true);
+        break;
+      case AckType.NackDiscard:
+        ch.nack(msg, false, false);
+        break;
+      default:
+        console.log('UNEXPECTED ACK');
+        break;
+    }
+  });
+}

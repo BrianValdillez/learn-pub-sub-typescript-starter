@@ -1,8 +1,11 @@
 import amqp from "amqplib";
-import { declareAndBind, publishJSON, SimpleQueueType } from "../internal/pubsub/pubsub.js";
+import { declareAndBind, publishJSON, SimpleQueueType, subscribeMsgPack } from "../internal/pubsub/pubsub.js";
 import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from "../internal/routing/routing.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { getInput, printServerHelp } from "../internal/gamelogic/gamelogic.js";
+import { handlerGameLog } from "./handlers.js";
+import { decode } from "@msgpack/msgpack";
+import { type GameLog } from "../internal/gamelogic/logs.js";
 
 async function main() {
   console.log("Starting Peril server...");
@@ -13,7 +16,7 @@ async function main() {
 
   const ch = await conn.createConfirmChannel();
 
-  //const gameLog = await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable);
+  await subscribeMsgPack(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.#`, SimpleQueueType.Durable, handlerGameLog, deserializerGameLog);
 
   printServerHelp();
 
@@ -60,3 +63,23 @@ main().catch((err) => {
   console.error("Fatal error:", err);
   process.exit(1);
 });
+
+function deserializerGameLog(data: Buffer<ArrayBufferLike>): GameLog{
+  const log =  decode<GameLog>(data);
+
+  if (!isGameLog(log)){
+    throw new Error("Invalid GameLog");
+  }
+
+  return log;
+}
+
+function isGameLog(data: unknown): data is GameLog {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "currentTime" in data &&
+    "message" in data &&
+    "username" in data
+  );
+}
